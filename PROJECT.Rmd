@@ -1,0 +1,449 @@
+---
+title: "Regression"
+author: "Sai Pramod Bhupathi"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{R}
+library(dplyr)
+library(ggplot2)
+library(readxl)
+
+data <- read.csv("E:/GSU_Study/COURSE_SCHEDULE/FALL/MSA8190-Statistical Foundation/Practise HW/Bias_correction_ucl.csv")
+
+
+missing_values <- sapply(data, function(x) sum(is.na(x)))
+
+missing_data_frame <- data.frame(variable = names(missing_values), missing_count = missing_values)
+
+missing_data_frame <- filter(missing_data_frame, missing_count > 0)
+
+# Plotting the missing values
+ggplot(missing_data_frame, aes(x = variable, y = missing_count)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = "Variables", y = "Number of Missing Values", title = "Missing Values in Each Variable")
+
+```
+
+```{r}
+
+missing_data_frame <- arrange(missing_data_frame, desc(missing_count))
+
+print(missing_data_frame)
+
+# 1% of the data is missing
+```
+
+```{r}
+#removing missing values
+
+data_clean =na.omit(data)
+
+data_clean <- select(data_clean,- station)
+
+
+
+
+```
+
+```{r}
+str(data_clean)
+```
+
+```{r}
+data_sorted <- data_clean %>% arrange(as.Date(Date, format="%Y-%m-%d"))
+
+n <- nrow(data_sorted)
+train_index <- floor(0.6 * n)
+valid_index <- floor(0.8 * n)
+
+```
+
+```{r}
+# Split the data into Train, Valid, and Test sets
+Train <- data_sorted[1:train_index, ]
+Valid <- data_sorted[(train_index + 1):valid_index, ]
+Test <- data_sorted[(valid_index + 1):n, ]
+
+```
+
+```{r}
+#cross checking for null values
+sapply(Train, function(x) sum(is.na(x)))
+sapply(Valid, function(x) sum(is.na(x)))
+sapply(Test, function(x) sum(is.na(x)))
+
+
+```
+
+```{r}
+
+model_initial <- lm(Next_Tmax ~ Present_Tmax+Present_Tmin+LDAPS_RHmin+LDAPS_RHmax+LDAPS_Tmax_lapse+
+                      LDAPS_Tmin_lapse+LDAPS_WS+LDAPS_LH+LDAPS_CC1+LDAPS_CC2+LDAPS_CC3+LDAPS_CC4+
+                      LDAPS_PPT1+LDAPS_PPT2+LDAPS_PPT3+LDAPS_PPT4+lat+lon+DEM+Slope+Solar.radiation, data = Train) # Excluding Date from 
+
+predictions_valid <- predict(model_initial, Valid)
+
+# Calculate RMSE on the validation set
+rmse_valid <- sqrt(mean((Valid$Next_Tmax - predictions_valid)^2))
+
+summary(model_initial)
+
+# Plotting residuals to check for patterns
+residuals <- resid(model_initial)
+ggplot(Train, aes(x = fitted(model_initial), y = residuals)) + 
+    geom_point() + 
+    geom_hline(yintercept = 0, linetype = "dashed") + 
+    xlab("Fitted Values") + ylab("Residuals") + 
+    ggtitle("Residuals vs Fitted")
+
+# Output RMSE
+rmse_valid
+
+library(lmtest)
+library(zoo)
+shapiro.test(model_initial$residuals)
+bptest(model_initial)
+
+```
+
+Multiple R-squared (0.738)
+
+Adjusted R-squared (0.737): very close to the Multiple R-squared. This tells us that 73% of variation is being explained in the model for the predicted variable
+
+F-statistic (609.7): This is high, and the extremely low p-value (< 2.2e-16) confirms that the model is statistically significant.
+
+Significance of Variables
+
+Highly Significant Variables (p < 0.001): Includes variables like Present_Tmax, LDAPS_RHmin, LDAPS_RHmax, LDAPS_Tmax_lapse, LDAPS_WS, LDAPS_LH, LDAPS_CC1, LDAPS_CC3, LDAPS_CC4, LDAPS_PPT2, lat, lon, Slope, DEM
+
+Moderately Significant Variables: Such as Present_Tmin, LDAPS_Tmin_lapse, LDAPS_CC2, LDAPS_PPT1, LDAPS_PPT4, Solar.radiation.
+
+Insignificant Variables: LDAPS_PPT3,LDAPS_PPT4 has a high p-value, suggesting it does not significantly contribute to the model.
+
+Residuals
+The summary of residuals shows a range from -5.7 to 6.19 with quartiles spread around zero, indicating a reasonably symmetric distribution of residuals.
+
+From the Sharipo test we conclude that the residuals dont follow normal distribution as pvalue is lesser than 0.05.
+
+
+```{R}
+
+#REMOVING LDAPS_PPT3
+model_initial1 <- lm(Next_Tmax ~ Present_Tmax+Present_Tmin+LDAPS_RHmin+LDAPS_RHmax+LDAPS_Tmax_lapse+
+                      LDAPS_Tmin_lapse+LDAPS_WS+LDAPS_LH+LDAPS_CC1+LDAPS_CC2+LDAPS_CC3+LDAPS_CC4+
+                      LDAPS_PPT1+LDAPS_PPT2+LDAPS_PPT4+lat+lon+DEM+Slope+Solar.radiation, data = Train) 
+
+predictions_valid1 <- predict(model_initial1, Valid)
+
+rmse_valid1 <- sqrt(mean((Valid$Next_Tmax - predictions_valid1)^2))
+
+summary(model_initial1)
+
+
+rmse_valid1
+```
+```{R}
+#REMOVING LDAPS_PPT4
+model_initial1 <- lm(Next_Tmax ~ Present_Tmax+Present_Tmin+LDAPS_RHmin+LDAPS_RHmax+LDAPS_Tmax_lapse+
+                      LDAPS_Tmin_lapse+LDAPS_WS+LDAPS_LH+LDAPS_CC1+LDAPS_CC2+LDAPS_CC3+LDAPS_CC4+
+                      LDAPS_PPT1+LDAPS_PPT2+lat+lon+DEM+Slope+Solar.radiation, data = Train) 
+
+predictions_valid1 <- predict(model_initial1, Valid)
+
+rmse_valid1 <- sqrt(mean((Valid$Next_Tmax - predictions_valid1)^2))
+
+summary(model_initial1)
+
+
+rmse_valid1
+
+```
+
+```{r}
+# Create a new feature: Daily Temperature Range
+Train$Temp_Range <- Train$Present_Tmax - Train$Present_Tmin
+Valid$Temp_Range <- Valid$Present_Tmax - Valid$Present_Tmin
+
+
+
+# Update the model with the new feature
+model_with_feature <- lm(Next_Tmax ~  LDAPS_RHmin + LDAPS_RHmax +
+                         LDAPS_Tmax_lapse + LDAPS_Tmin_lapse + LDAPS_WS + LDAPS_LH + LDAPS_CC1 +
+                         LDAPS_CC2 + LDAPS_CC3 + LDAPS_CC4 + LDAPS_PPT1 + LDAPS_PPT2 + 
+                          lat + lon + DEM + Slope + Solar.radiation + Temp_Range, 
+                         data = Train)
+
+predictions_valid_with_feature <- predict(model_with_feature, Valid)
+
+rmse_valid_with_feature <- sqrt(mean((Valid$Next_Tmax - predictions_valid_with_feature)^2))
+
+summary(model_with_feature)
+
+rmse_valid_with_feature
+
+```
+
+```{R}
+#removing LDAPS_CC2 ,Solar radiation
+#droping the model due to poor performance
+
+model_with_feature1a <- lm(Next_Tmax ~  LDAPS_RHmin + LDAPS_RHmax +
+                         LDAPS_Tmax_lapse + LDAPS_Tmin_lapse + LDAPS_WS + LDAPS_LH + LDAPS_CC1  + LDAPS_CC3 + LDAPS_CC4 + LDAPS_PPT1 + LDAPS_PPT2  +
+                          lat + lon + DEM + Slope +  Temp_Range, 
+                         data = Train)
+
+predictions_valid_with_feature1a <- predict(model_with_feature1a, Valid)
+
+rmse_valid_with_feature1a <- sqrt(mean((Valid$Next_Tmax - predictions_valid_with_feature1a)^2))
+
+summary(model_with_feature1a)
+
+rmse_valid_with_feature1a
+
+```
+
+
+```{r}
+
+Train$LDAPS_Range <- Train$LDAPS_RHmax - Train$LDAPS_RHmin
+Valid$LDAPS_Range <- Valid$LDAPS_RHmax - Valid$LDAPS_RHmin
+
+model_with_feature2 <- lm(Next_Tmax ~ Present_Tmax + Present_Tmin  +
+                         LDAPS_Tmax_lapse + LDAPS_Tmin_lapse + LDAPS_WS + LDAPS_LH + LDAPS_CC1 +
+                         LDAPS_CC2 + LDAPS_CC3 + LDAPS_CC4 + LDAPS_PPT1 + LDAPS_PPT2  + lat + lon + DEM + Slope + Solar.radiation +LDAPS_Range, 
+                         data = Train)
+
+predictions_valid_with_feature2 <- predict(model_with_feature2, Valid)
+
+rmse_valid_with_feature2 <- sqrt(mean((Valid$Next_Tmax - predictions_valid_with_feature2)^2))
+
+summary(model_with_feature2)
+
+rmse_valid_with_feature2
+
+```
+After removing the insignificant variables model performance is same as initial model
+
+```{R}
+
+Train$Interaction_WS_LH <- Train$LDAPS_WS * Train$LDAPS_LH
+Valid$Interaction_WS_LH <- Valid$LDAPS_WS * Valid$LDAPS_LH
+
+# Update the model with the interaction term
+model_with_feature3 <- lm(Next_Tmax ~ Present_Tmax + Present_Tmin + LDAPS_RHmin + 
+    LDAPS_RHmax + LDAPS_Tmax_lapse + LDAPS_Tmin_lapse +  LDAPS_CC1 + LDAPS_CC2 + LDAPS_CC3 + LDAPS_CC4 + 
+    LDAPS_PPT1 + LDAPS_PPT2 + lat + lon + DEM + Slope + Solar.radiation + Interaction_WS_LH, data = Train)
+
+
+predictions_valid_with_feature3 <- predict(model_with_feature3, Valid)
+
+rmse_valid_with_feature3 <- sqrt(mean((Valid$Next_Tmax - predictions_valid_with_feature3)^2))
+
+summary(model_with_feature3)
+
+rmse_valid_with_feature3
+```
+
+
+
+```{R}
+Train$Present_Tmax_squared <- Train$Present_Tmax^2
+Valid$Present_Tmax_squared <- Valid$Present_Tmax^2
+
+
+# Update the model with the squared term
+model_with_feature4 <- lm(Next_Tmax ~  Present_Tmax_squared + 
+    Present_Tmin + LDAPS_RHmin + LDAPS_RHmax + LDAPS_Tmax_lapse + 
+    LDAPS_Tmin_lapse + LDAPS_WS + LDAPS_LH + LDAPS_CC1 + LDAPS_CC2 + 
+    LDAPS_CC3 + LDAPS_CC4 + LDAPS_PPT1 + LDAPS_PPT2 + lat + lon +
+    DEM + Slope + Solar.radiation, data = Train)
+
+
+predictions_valid_with_feature4 <- predict(model_with_feature4, Valid)
+
+rmse_valid_with_feature4 <- sqrt(mean((Valid$Next_Tmax - predictions_valid_with_feature4)^2))
+
+summary(model_with_feature4)
+
+rmse_valid_with_feature4
+
+```
+
+```{R}
+# Log-transform LDAPS_WS
+Train$LDAPS_WS_log <- log(Train$LDAPS_WS + 1)  # Adding 1 to avoid log(0)
+Valid$LDAPS_WS_log <- log(Valid$LDAPS_WS + 1)
+
+# Update the model with the transformed variable
+model_with_feature5 <- lm(Next_Tmax ~ Present_Tmax + Present_Tmin + LDAPS_RHmin + 
+    LDAPS_RHmax + LDAPS_Tmax_lapse + LDAPS_Tmin_lapse + LDAPS_LH + 
+    LDAPS_CC1 + LDAPS_CC2 + LDAPS_CC3 + LDAPS_CC4 + LDAPS_PPT1 + LDAPS_PPT2 +
+    lat + lon + DEM + Slope + Solar.radiation + LDAPS_WS_log, data = Train)
+
+
+predictions_valid_with_feature5 <- predict(model_with_feature5, Valid)
+
+rmse_valid_with_feature5<- sqrt(mean((Valid$Next_Tmax - predictions_valid_with_feature5)^2))
+
+summary(model_with_feature5)
+
+rmse_valid_with_feature5
+
+```
+
+```{R}
+
+Train$LDAPS_Total <- Train$LDAPS_CC1+Train$LDAPS_CC2+Train$LDAPS_CC3+Train$LDAPS_CC4
+Valid$LDAPS_Total <- Valid$LDAPS_CC1+Valid$LDAPS_CC2+Valid$LDAPS_CC3+Valid$LDAPS_CC4
+
+# Update the model with the transformed variable
+model_with_feature6 <- lm(Next_Tmax ~ Present_Tmax + Present_Tmin + LDAPS_RHmin + 
+    LDAPS_RHmax + LDAPS_Tmax_lapse + LDAPS_Tmin_lapse + LDAPS_LH + 
+     + LDAPS_PPT1 + LDAPS_PPT2 +LDAPS_WS_log+
+    lat + lon + DEM + Slope + Solar.radiation + LDAPS_Total, data = Train)
+
+
+predictions_valid_with_feature6 <- predict(model_with_feature6, Valid)
+
+rmse_valid_with_feature6<- sqrt(mean((Valid$Next_Tmax - predictions_valid_with_feature6)^2))
+
+summary(model_with_feature6)
+
+rmse_valid_with_feature6
+
+
+
+```
+
+```{r}
+
+# Update the model with removing solar radiation
+model_with_feature6 <- lm(Next_Tmax ~ Present_Tmax + Present_Tmin + LDAPS_RHmin + 
+    LDAPS_RHmax + LDAPS_Tmax_lapse + LDAPS_Tmin_lapse + LDAPS_LH + 
+     + LDAPS_PPT1 + LDAPS_PPT2 +LDAPS_WS_log+
+    lat + lon  + Slope + DEM + LDAPS_Total, data = Train)
+
+
+predictions_valid_with_feature6 <- predict(model_with_feature6, Valid)
+
+rmse_valid_with_feature6<- sqrt(mean((Valid$Next_Tmax - predictions_valid_with_feature6)^2))
+
+summary(model_with_feature6)
+
+rmse_valid_with_feature6
+
+
+
+```
+
+```{r}
+
+
+Train$LDAPS_PPT_TOTAL <- Train$LDAPS_PPT2+Train$LDAPS_PPT1
+Valid$LDAPS_PPT_TOTAL <- Valid$LDAPS_PPT2+Valid$LDAPS_PPT1
+
+model_with_feature6a <- lm(Next_Tmax ~ Present_Tmax + Present_Tmin + LDAPS_RHmin + 
+    LDAPS_RHmax + LDAPS_Tmax_lapse + LDAPS_Tmin_lapse + LDAPS_LH +
+     + LDAPS_PPT_TOTAL+LDAPS_WS_log+DEM+
+    lat + lon  + Slope +  LDAPS_Total, data = Train)
+
+
+predictions_valid_with_feature6a <- predict(model_with_feature6a, Valid)
+
+rmse_valid_with_feature6a<- sqrt(mean((Valid$Next_Tmax - predictions_valid_with_feature6a)^2))
+
+summary(model_with_feature6a)
+
+rmse_valid_with_feature6a
+
+
+```
+```{r}
+
+bestmodel <- lm(Next_Tmax ~ Present_Tmax +  LDAPS_RHmin + 
+    LDAPS_RHmax + LDAPS_Tmax_lapse + LDAPS_Tmin_lapse + LDAPS_LH +
+     + LDAPS_PPT_TOTAL+LDAPS_WS+DEM+
+    lat + lon  + Slope +  LDAPS_Total, data = Train)
+
+
+predictions_valid_with_feature6a <- predict(bestmodel, Valid)
+
+rmse_valid_with_feature6a<- sqrt(mean((Valid$Next_Tmax - predictions_valid_with_feature6a)^2))
+
+summary(bestmodel)
+rmse_valid_with_feature6a
+
+```
+
+
+Multiple R-squared (0.729): This value indicates that approximately 72% of the variability in Next_Tmax is explained by the model.
+
+Adjusted R-squared (0.728): Very close to the Multiple R-squared, suggesting that the number of predictors is appropriate for the model.
+
+F-statistic (941.1): This is very high, and the associated p-value is significantly low (< 2.2e-16), indicating that the overall model is statistically significant.
+
+Significance of Variables
+
+All the variables are highly significant LDAPS_Tmin_lapse in predicting the Next_Tmax.
+
+LDAPS_Tmin_lapse is also significant but lesser compared to other variables
+
+
+Residuals Distribution: The range of residuals is from -5.6 to 5.6, with the quartiles suggesting that the majority of residuals are clustered closer to zero, which is a good sign.
+
+```{r}
+
+
+# Plotting residuals to check for patterns
+residuals <- bestmodel$residuals
+ggplot(Train, aes(x = fitted(bestmodel), y = residuals)) + 
+    geom_point() + 
+    geom_hline(yintercept = 0, linetype = "dashed") + 
+    xlab("Fitted Values") + ylab("Residuals") + 
+    ggtitle("Residuals vs Fitted")
+
+shapiro.test(residuals(bestmodel))
+bptest(bestmodel)
+
+
+```
+
+```{r}
+# Initial Model
+# Make predictions on the test set
+predictions_test_initial <- predict(model_initial, Test)
+
+# Calculate RMSE on the test set for the initial model
+rmse_test_initial <- sqrt(mean((Test$Next_Tmax - predictions_test_initial)^2))
+
+#feature engineering variables from the best model
+Test$LDAPS_PPT_TOTAL <- Test$LDAPS_PPT2+Test$LDAPS_PPT1
+Test$LDAPS_Total <- Test$LDAPS_CC1+Test$LDAPS_CC2+Test$LDAPS_CC3+Test$LDAPS_CC4
+
+
+# Improved Model
+# Make predictions on the test set for the model with the new feature
+predictions_test_with_feature6 <- predict(bestmodel, Test)
+
+# Calculate RMSE on the test set for the improved model
+rmse_test_with_feature6 <- sqrt(mean((Test$Next_Tmax - predictions_test_with_feature6)^2))
+
+
+# Print RMSE for the initial and improved models on the test set
+print("RMSETest for Initial Model:")
+summary(predictions_test_initial)
+print(rmse_test_initial)
+
+print("RMSETest for Best Model")
+summary(predictions_test_with_feature6)
+print(rmse_test_with_feature6)
+```
